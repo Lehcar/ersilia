@@ -676,6 +676,37 @@ class SimpleConda(CondaUtils):
                     critical_errors += [l]
         return critical_errors
 
+    def _is_conda_available(self):
+        """
+        Check if conda is available and we're in a proper conda environment.
+
+        Returns
+        -------
+        bool
+            True if conda is available and we're in a proper environment.
+
+        Raises
+        ------
+        Exception
+            If conda is not available or we're not in a proper conda environment.
+        """
+        try:
+            run_command_check_output("conda --version")
+        except Exception:
+            raise Exception(
+                "Conda is not available. Please install Conda or Miniconda to use this functionality."
+            )
+
+        current_env = self.default_env()
+        if current_env is None or current_env == "base":
+            raise Exception(
+                "You must be in a proper conda environment (not base). "
+                "Please create and activate a conda environment before using this functionality. "
+                "Example: conda create -n myenv && conda activate myenv"
+            )
+
+        return True
+
     def create_executable_bash_script(self, environment, commandlines, file_name):
         """
         Create an executable bash script to run commands in a conda environment.
@@ -726,9 +757,12 @@ conda run -n {0} bash -c '{1}'
 
         Raises
         ------
+        Exception
+            If conda is not available or not in a conda environment.
         ModelPackageInstallError
             If critical errors are found in the conda logs.
         """
+        self._is_conda_available()
         if type(commandlines) is list:
             commandlines = " && ".join(commandlines)
         logger.debug("Run commandlines on {0}".format(environment))
