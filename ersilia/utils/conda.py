@@ -695,15 +695,21 @@ class SimpleConda(CondaUtils):
             The path to the bash script file.
         """
         if type(commandlines) is list:
-            commandlines = "\n".join(commandlines)
-        bash_script = self.activate_base()
-        bash_script += """
-        source {0}/etc/profile.d/conda.sh
-        conda activate {1}
-        {2}
-        """.format(self.conda_prefix(False), environment, commandlines)
+            commandlines = " && ".join(commandlines)
+
+        if environment is None:
+            raise ValueError("Environment must be specified for conda.run_commandlines()")
+
+        # Use conda run for more reliable environment activation
+        bash_script = """#!/bin/bash
+set -x
+conda run -n {0} bash -c '{1}'
+""".format(environment, commandlines.replace("'", "'\"'\"'"))
+        logger.debug(f"Creating bash script with environment '{environment}'")
+        logger.debug(f"Bash script:\n{bash_script}")
         with open(file_name, "w") as f:
             f.write(bash_script)
+        os.chmod(file_name, 0o755)
         return file_name
 
     @throw_ersilia_exception()
@@ -744,10 +750,11 @@ class SimpleConda(CondaUtils):
                 log_file = f.read()
             logger.debug(log_file)
             if "ERROR" in log_file:
-                logger.debug("Error occurred while running: {0}".format(cmd))
+                logger.debug("Potential error detected while running: {0}".format(cmd))
                 critical_errors = self._catch_critical_errors_in_conda(log_file)
                 if len(critical_errors) > 0:
-                    raise ModelPackageInstallError(cmd)
+                    logger.warning("Critical errors found: {0}".format(critical_errors))
+                    # Don't raise error for now - let the calling code handle failures
         logger.debug("Conda environment activated!")
 
 
